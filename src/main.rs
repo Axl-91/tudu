@@ -19,7 +19,7 @@ enum FormAction {
 
 const INFO_TEXT: [&str; 2] = [
     "(Esc) quit | (↑) move up | (↓) move down | (Enter) Mark as completed/uncompleted | (A) create | (D) delete ",
-    "Insert description for the new TuDu | (Enter) Create | (Esc) Go back",
+    "(Enter) Create | (Esc) Go back",
 ];
 
 #[derive(Debug, Default)]
@@ -164,15 +164,27 @@ fn render_list(area: Rect, frame: &mut Frame, app: &mut TuduApp) {
 }
 
 fn render_new(area: Rect, frame: &mut Frame, app: &mut TuduApp) {
+    let vertical = &Layout::vertical([Constraint::Percentage(10), Constraint::Min(3)]);
+    let rects = vertical.split(area);
+
+    Paragraph::new("Add description for new TuDu")
+        .centered()
+        .style(Style::new().fg(ratatui::style::Color::White))
+        .block(
+            Block::bordered()
+                .fg(Color::DarkGreen)
+                .border_type(block::BorderType::Double),
+        )
+        .render(rects[0], frame.buffer_mut());
+
     Paragraph::new(app.input_value.as_str())
         .block(
             Block::bordered()
-                .title("Create a new TuDu".to_span().into_centered_line())
                 .fg(Color::DarkGreen)
                 .padding(Padding::uniform(1))
                 .border_type(block::BorderType::Rounded),
         )
-        .render(area, frame.buffer_mut());
+        .render(rects[1], frame.buffer_mut());
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, info_id: usize) {
