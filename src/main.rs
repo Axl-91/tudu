@@ -4,8 +4,8 @@ use ratatui::{
         event::{self, Event, KeyEvent},
         style::Color,
     },
-    layout::{Constraint, Layout},
-    style::{Style, Stylize},
+    layout::{Constraint, Layout, Rect},
+    style::{palette::tailwind, Style, Stylize},
     text::{Line, ToSpan},
     widgets::{block, Block, List, ListState, Padding, Paragraph, Widget},
     DefaultTerminal, Frame,
@@ -16,6 +16,11 @@ enum FormAction {
     Submit,
     Escape,
 }
+
+const INFO_TEXT: [&str; 2] = [
+    "(Esc) quit | (↑) move up | (↓) move down | (Enter) Mark as completed/uncompleted | (A) create | (D) delete ",
+    "Insert description for the new TuDu | (Enter) Create | (Esc) Go back",
+];
 
 #[derive(Debug, Default)]
 struct TuduApp {
@@ -72,10 +77,10 @@ fn handle_key_press(key: KeyEvent, app: &mut TuduApp) -> bool {
                 }
             }
         }
+        event::KeyCode::Up => app.list_state.select_previous(),
+        event::KeyCode::Down => app.list_state.select_next(),
         event::KeyCode::Char(char) => match char {
             'q' => return true,
-            'k' => app.list_state.select_next(),
-            'j' => app.list_state.select_previous(),
             'A' => app.is_add_new = true,
             'D' => {
                 if let Some(index) = app.list_state.selected() {
@@ -132,44 +137,74 @@ fn run(mut terminal: DefaultTerminal, app: &mut TuduApp) -> Result<()> {
     Ok(())
 }
 
-fn render(frame: &mut Frame, app: &mut TuduApp) {
-    let [border_area] = Layout::vertical([Constraint::Fill(1)])
+fn render_list(area: Rect, frame: &mut Frame, app: &mut TuduApp) {
+    let [list_area] = Layout::vertical([Constraint::Fill(1)])
         .margin(1)
-        .areas(frame.area());
+        .areas(area);
+
+    Block::bordered()
+        .title("List of TuDus".to_span().into_centered_line())
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .fg(Color::DarkMagenta)
+        .render(area, frame.buffer_mut());
+
+    let style = Style::new().magenta();
+
+    let list = List::new(app.tudus.iter().map(|x| {
+        if x.completed {
+            Line::styled(format!(" ✓ {}", x.description), style)
+        } else {
+            Line::styled(format!(" ☐ {}", x.description), style)
+        }
+    }))
+    .highlight_symbol(">")
+    .highlight_style(Style::default().fg(ratatui::style::Color::Green));
+
+    frame.render_stateful_widget(list, list_area, &mut app.list_state);
+}
+
+fn render_new(area: Rect, frame: &mut Frame, app: &mut TuduApp) {
+    Paragraph::new(app.input_value.as_str())
+        .block(
+            Block::bordered()
+                .title("Create a new TuDu".to_span().into_centered_line())
+                .fg(Color::DarkGreen)
+                .padding(Padding::uniform(1))
+                .border_type(block::BorderType::Rounded),
+        )
+        .render(area, frame.buffer_mut());
+}
+
+fn render_footer(frame: &mut Frame, area: Rect, info_id: usize) {
+    let info_footer = Paragraph::new(INFO_TEXT[info_id])
+        .style(
+            Style::new()
+                .fg(tailwind::SLATE.c200)
+                .bg(tailwind::SLATE.c950),
+        )
+        .centered()
+        .block(
+            Block::bordered()
+                .border_type(block::BorderType::Plain)
+                .border_style(Style::new().fg(tailwind::SLATE.c400)),
+        );
+    frame.render_widget(info_footer, area);
+}
+
+fn render(frame: &mut Frame, app: &mut TuduApp) {
+    let mut info_id = 0;
+    let vertical = &Layout::vertical([Constraint::Percentage(100), Constraint::Min(3)]);
+    let rects = vertical.split(frame.area());
+
+    let [border_area] = Layout::vertical([Constraint::Fill(1)])
+        .margin(0)
+        .areas(rects[0]);
 
     if app.is_add_new {
-        Paragraph::new(app.input_value.as_str())
-            .block(
-                Block::bordered()
-                    .title("Create a new TuDu".to_span().into_centered_line())
-                    .fg(Color::DarkGreen)
-                    .padding(Padding::uniform(1))
-                    .border_type(block::BorderType::Rounded),
-            )
-            .render(border_area, frame.buffer_mut());
+        render_new(border_area, frame, app);
+        info_id = 1;
     } else {
-        let [list_area] = Layout::vertical([Constraint::Fill(1)])
-            .margin(1)
-            .areas(border_area);
-
-        Block::bordered()
-            .title("List of TuDus".to_span().into_centered_line())
-            .border_type(ratatui::widgets::BorderType::Rounded)
-            .fg(Color::DarkMagenta)
-            .render(border_area, frame.buffer_mut());
-
-        let style = Style::new().magenta();
-
-        let list = List::new(app.tudus.iter().map(|x| {
-            if x.completed {
-                Line::styled(format!(" ☐ {}", x.description), style)
-            } else {
-                Line::styled(format!(" ✓ {}", x.description), style)
-            }
-        }))
-        .highlight_symbol(">")
-        .highlight_style(Style::default().fg(ratatui::style::Color::Green));
-
-        frame.render_stateful_widget(list, list_area, &mut app.list_state);
+        render_list(border_area, frame, app);
     }
+    render_footer(frame, rects[1], info_id);
 }
