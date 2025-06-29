@@ -23,4 +23,8 @@ impl Tudu {
             description,
         }
     }
+
+    pub fn change_state(&mut self) {
+        self.completed = !self.completed;
+    }
 }
