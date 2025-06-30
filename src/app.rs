@@ -4,14 +4,23 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     DefaultTerminal, Frame,
 };
 
 use crate::tudu::Tudu;
 
+#[derive(Debug, Default)]
+struct Cursor {
+    init_x: u16,
+    x: u16,
+    y: u16,
+    limit: u16,
+}
+
 pub struct App {
     tudus: Vec<Tudu>,
+    cursor: Cursor,
     msg_size: usize,
     selected: usize,
     list_state: ListState,
@@ -87,15 +96,30 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.input.clear();
+                self.cursor.x = 0;
                 self.edit_mode = false;
             }
             KeyCode::Backspace => {
-                self.input.pop();
+                if !self.input.is_empty() {
+                    self.input.pop();
+                    if self.cursor.x == self.cursor.init_x {
+                        self.cursor.x = self.cursor.limit;
+                        self.cursor.y -= 1;
+                    } else {
+                        self.cursor.x -= 1;
+                    }
+                }
             }
             KeyCode::Enter => self.create_tudu(),
             event::KeyCode::Char(char) => {
-                if self.input.len() < 60 {
-                    self.input.push(char)
+                if self.input.len() < 250 {
+                    self.input.push(char);
+                    if self.cursor.x == self.cursor.limit {
+                        self.cursor.x = self.cursor.init_x;
+                        self.cursor.y += 1;
+                    } else {
+                        self.cursor.x += 1;
+                    }
                 }
             }
             _ => {}
@@ -192,15 +216,20 @@ impl App {
             .style(Style::default().bg(Color::Black).fg(Color::Red));
 
         let input = Paragraph::new(self.input.as_str())
+            .wrap(Wrap { trim: false })
             .style(Style::default().fg(Color::White))
             .block(popup_block);
 
         let area = self.popup_rect(75, 15, frame.area());
 
-        frame.set_cursor_position(Position::new(
-            area.x + self.input.len() as u16 + 1,
-            area.y + 1,
-        ));
+        if self.cursor.x == 0 {
+            self.cursor.init_x = area.x + 1;
+            self.cursor.x = area.x + 1;
+            self.cursor.y = area.y + 1;
+            self.cursor.limit = (area.x - 1) + (area.width - 1);
+        }
+        let cursor_position = Position::new(self.cursor.x, self.cursor.y);
+        frame.set_cursor_position(cursor_position);
 
         frame.render_widget(input, area);
     }
@@ -232,6 +261,7 @@ impl App {
     pub fn new() -> Self {
         Self {
             input: String::new(),
+            cursor: Cursor::default(),
             msg_size: 0,
             selected: 0,
             list_state: ListState::default(),
