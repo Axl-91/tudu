@@ -1,8 +1,8 @@
 use color_eyre::eyre::Result;
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEvent},
-    layout::{Constraint, Layout, Position, Rect},
-    style::{Modifier, Style, Stylize},
+    layout::{Constraint, Direction, Layout, Position, Rect},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     DefaultTerminal, Frame,
@@ -22,19 +22,6 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
-        Self {
-            input: String::new(),
-            msg_size: 0,
-            selected: 0,
-            list_state: ListState::default(),
-            offset: 0,
-            edit_mode: false,
-            tudus: Vec::new(),
-            exit: false,
-        }
-    }
-
     fn previous_selected(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
@@ -106,7 +93,11 @@ impl App {
                 self.input.pop();
             }
             KeyCode::Enter => self.create_tudu(),
-            event::KeyCode::Char(char) => self.input.push(char),
+            event::KeyCode::Char(char) => {
+                if self.input.len() < 60 {
+                    self.input.push(char)
+                }
+            }
             _ => {}
         }
     }
@@ -151,12 +142,24 @@ impl App {
         &self.tudus[self.offset..end]
     }
 
-    pub fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        while !self.exit {
-            terminal.draw(|frame| self.draw(frame))?;
-            self.check_input()?;
-        }
-        Ok(())
+    fn popup_rect(&self, percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+        let popup_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ])
+            .split(r);
+
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ])
+            .split(popup_layout[1])[1] // Return the middle chunk
     }
 
     fn draw_messages(&mut self, frame: &mut Frame, area: Rect) {
@@ -176,28 +179,28 @@ impl App {
                     .title("TuDu")
                     .title_alignment(ratatui::layout::Alignment::Center),
             )
-            .highlight_style(Style::default().fg(ratatui::style::Color::Green))
+            .highlight_style(Style::default().fg(Color::Green))
             .highlight_symbol("➤ ");
 
         frame.render_stateful_widget(list, area, &mut self.list_state);
     }
 
-    fn draw_input(&mut self, frame: &mut Frame, area: Rect) {
-        if self.edit_mode {
-            frame.set_cursor_position(Position::new(
-                area.x + self.input.len() as u16 + 1,
-                area.y + 1,
-            ));
-        }
-        let style_input = if self.edit_mode {
-            Style::default().fg(ratatui::style::Color::Red)
-        } else {
-            Style::default()
-        };
+    fn draw_input(&mut self, frame: &mut Frame) {
+        let popup_block = Block::default()
+            .title("Create a new TuDu")
+            .borders(Borders::ALL)
+            .style(Style::default().bg(Color::Black).fg(Color::Red));
 
         let input = Paragraph::new(self.input.as_str())
-            .style(Style::default().fg(ratatui::style::Color::White))
-            .block(Block::bordered().title("Input").border_style(style_input));
+            .style(Style::default().fg(Color::White))
+            .block(popup_block);
+
+        let area = self.popup_rect(75, 15, frame.area());
+
+        frame.set_cursor_position(Position::new(
+            area.x + self.input.len() as u16 + 1,
+            area.y + 1,
+        ));
 
         frame.render_widget(input, area);
     }
@@ -213,18 +216,37 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let vertical = Layout::vertical([
-            Constraint::Min(1),
-            Constraint::Length(3),
-            Constraint::Length(1),
-        ]);
-        let [messages_area, input_area, help_area] = vertical.areas(frame.area());
+        let vertical = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]);
+        let [messages_area, help_area] = vertical.areas(frame.area());
         self.msg_size = messages_area.height as usize;
 
         self.draw_messages(frame, messages_area);
 
-        self.draw_input(frame, input_area);
-
         self.draw_help(frame, help_area);
+
+        if self.edit_mode {
+            self.draw_input(frame);
+        }
+    }
+
+    pub fn new() -> Self {
+        Self {
+            input: String::new(),
+            msg_size: 0,
+            selected: 0,
+            list_state: ListState::default(),
+            offset: 0,
+            edit_mode: false,
+            tudus: Vec::new(),
+            exit: false,
+        }
+    }
+
+    pub fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        while !self.exit {
+            terminal.draw(|frame| self.draw(frame))?;
+            self.check_input()?;
+        }
+        Ok(())
     }
 }
