@@ -57,9 +57,7 @@ impl App {
 
     fn default_input(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('q') => self.exit = true,
-            KeyCode::Char('e') => self.edit_mode = true,
-            KeyCode::Char('E') => self.edit_mode = true,
+            KeyCode::Char('N') => self.edit_mode = true,
             KeyCode::Char('D') => {
                 if let Some(index) = self.list_state.selected() {
                     self.tudus.remove(index);
@@ -110,7 +108,10 @@ impl App {
                     }
                 }
             }
-            KeyCode::Enter => self.create_tudu(),
+            KeyCode::Enter => {
+                self.cursor.x = 0;
+                self.create_tudu()
+            }
             event::KeyCode::Char(char) => {
                 if self.input.len() < 250 {
                     self.input.push(char);
@@ -142,15 +143,15 @@ impl App {
             vec![
                 "Go back ".into(),
                 "<Esc>".blue().bold(),
-                " Add ".into(),
+                " Create ".into(),
                 "<Enter>".blue().bold(),
             ]
         } else {
             vec![
                 "Exit ".into(),
-                "<Esc/q>".blue().bold(),
+                "<Esc>".blue().bold(),
                 " New ".into(),
-                "<e/E>".blue().bold(),
+                "<N>".blue().bold(),
                 " Navigate ".into(),
                 "<Up/Down>".blue().bold(),
                 " Delete ".into(),
